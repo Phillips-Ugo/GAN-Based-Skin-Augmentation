@@ -1,0 +1,6 @@
+{
+  "classes": ["bkl", "nv", "df", "mel", "vasc", "bcc", "akiec"],
+  "provenance": "inferred",
+  "note": "The bundled weights carry no label metadata. This order is df['dx'].unique() over data/HAM10000_metadata.csv, which is the rule the original notebook used to build its label mapping (cell 22). It is an inference, not a record: if the Colab session read a differently ordered copy of the CSV, this is wrong. Weights written by scripts/run_experiment.py use the fixed alphabetical order in src/skinfair/config.py and do not depend on CSV row order.",
+  "superseded_by": "src/skinfair/config.py CLASSES"
+}

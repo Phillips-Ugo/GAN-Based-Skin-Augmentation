@@ -1,0 +1,4 @@
+# Test dependencies. The split and fairness tests need neither TensorFlow nor
+# the image archives, so the suite runs on numpy and pandas alone.
+-r requirements.txt
+pytest>=8.0,<9

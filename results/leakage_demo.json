@@ -1,0 +1,182 @@
+{
+  "what_this_is": "A controlled simulation of the split-protocol defect, not a rerun of the HAM10000 experiment. It measures the mechanism's effect size on synthetic data matched to HAM10000's class imbalance and repeat-image structure. Absolute accuracies are artefacts of the simulation; the gap between protocols at a given difficulty is the quantity of interest.",
+  "headline": "Oversampling to 5000 rows per class before splitting leaves 72% of the test set also present in training. Protocol A's reported accuracy is then close to 1.0 almost regardless of how hard the task is, so it carries little information about generalisation.",
+  "simulation_confound": "Protocol A's test set is drawn from the oversampled pool, so it is class-balanced, while protocol B's is the natural imbalanced distribution. Accuracy is therefore not strictly comparable between the two columns; macro-F1 is the more robust comparison, and both are reported. This mirrors the flaw in the original experiment, where the two arms were also scored on differently distributed sets.",
+  "caveat": "The real experiment trained a frozen-base linear head (8,967 parameters), so the logreg rows are the faithful analogue and the rf rows are an upper bound on the mechanism. Neither predicts the exact inflation in the original 85% figure, which can only be settled by rerunning scripts/run_experiment.py on the real images.",
+  "n_seeds": 3,
+  "mean_fraction_of_test_set_also_in_training": 0.7202,
+  "config": {
+    "n_lesions": 7470,
+    "n_features": 24,
+    "samples_per_class": 5000,
+    "within_lesion_noise": 0.15,
+    "test_fraction": 0.15,
+    "seeds": [
+      0,
+      1,
+      2
+    ]
+  },
+  "sweep": [
+    {
+      "model": "logreg",
+      "class_separation": 0.15,
+      "protocol_a_accuracy": 0.3355,
+      "protocol_b_accuracy": 0.3015,
+      "protocol_a_macro_f1": 0.3328,
+      "protocol_b_macro_f1": 0.1987,
+      "macro_f1_inflation": 0.1341,
+      "inflation": 0.034,
+      "inflation_per_seed": [
+        0.0448,
+        0.0243,
+        0.0329
+      ],
+      "test_overlap_fraction": 0.7202
+    },
+    {
+      "model": "logreg",
+      "class_separation": 0.25,
+      "protocol_a_accuracy": 0.462,
+      "protocol_b_accuracy": 0.4593,
+      "protocol_a_macro_f1": 0.4601,
+      "protocol_b_macro_f1": 0.3035,
+      "macro_f1_inflation": 0.1566,
+      "inflation": 0.0028,
+      "inflation_per_seed": [
+        0.0122,
+        -0.0274,
+        0.0235
+      ],
+      "test_overlap_fraction": 0.7202
+    },
+    {
+      "model": "logreg",
+      "class_separation": 0.35,
+      "protocol_a_accuracy": 0.6037,
+      "protocol_b_accuracy": 0.607,
+      "protocol_a_macro_f1": 0.6019,
+      "protocol_b_macro_f1": 0.4277,
+      "macro_f1_inflation": 0.1743,
+      "inflation": -0.0034,
+      "inflation_per_seed": [
+        -0.0098,
+        -0.0328,
+        0.0325
+      ],
+      "test_overlap_fraction": 0.7202
+    },
+    {
+      "model": "logreg",
+      "class_separation": 0.5,
+      "protocol_a_accuracy": 0.7799,
+      "protocol_b_accuracy": 0.7885,
+      "protocol_a_macro_f1": 0.7796,
+      "protocol_b_macro_f1": 0.6089,
+      "macro_f1_inflation": 0.1707,
+      "inflation": -0.0087,
+      "inflation_per_seed": [
+        -0.0163,
+        -0.041,
+        0.0313
+      ],
+      "test_overlap_fraction": 0.7202
+    },
+    {
+      "model": "logreg",
+      "class_separation": 0.7,
+      "protocol_a_accuracy": 0.9354,
+      "protocol_b_accuracy": 0.9212,
+      "protocol_a_macro_f1": 0.9352,
+      "protocol_b_macro_f1": 0.7982,
+      "macro_f1_inflation": 0.137,
+      "inflation": 0.0142,
+      "inflation_per_seed": [
+        0.0222,
+        -0.0031,
+        0.0234
+      ],
+      "test_overlap_fraction": 0.7202
+    },
+    {
+      "model": "rf",
+      "class_separation": 0.15,
+      "protocol_a_accuracy": 0.9952,
+      "protocol_b_accuracy": 0.6565,
+      "protocol_a_macro_f1": 0.9952,
+      "protocol_b_macro_f1": 0.1166,
+      "macro_f1_inflation": 0.8786,
+      "inflation": 0.3388,
+      "inflation_per_seed": [
+        0.333,
+        0.346,
+        0.3373
+      ],
+      "test_overlap_fraction": 0.7202
+    },
+    {
+      "model": "rf",
+      "class_separation": 0.25,
+      "protocol_a_accuracy": 0.994,
+      "protocol_b_accuracy": 0.6777,
+      "protocol_a_macro_f1": 0.994,
+      "protocol_b_macro_f1": 0.1866,
+      "macro_f1_inflation": 0.8074,
+      "inflation": 0.3163,
+      "inflation_per_seed": [
+        0.3087,
+        0.3241,
+        0.3162
+      ],
+      "test_overlap_fraction": 0.7202
+    },
+    {
+      "model": "rf",
+      "class_separation": 0.35,
+      "protocol_a_accuracy": 0.9948,
+      "protocol_b_accuracy": 0.731,
+      "protocol_a_macro_f1": 0.9948,
+      "protocol_b_macro_f1": 0.2954,
+      "macro_f1_inflation": 0.6994,
+      "inflation": 0.2638,
+      "inflation_per_seed": [
+        0.2631,
+        0.2826,
+        0.2458
+      ],
+      "test_overlap_fraction": 0.7202
+    },
+    {
+      "model": "rf",
+      "class_separation": 0.5,
+      "protocol_a_accuracy": 0.9963,
+      "protocol_b_accuracy": 0.8294,
+      "protocol_a_macro_f1": 0.9963,
+      "protocol_b_macro_f1": 0.4881,
+      "macro_f1_inflation": 0.5082,
+      "inflation": 0.1669,
+      "inflation_per_seed": [
+        0.1681,
+        0.1786,
+        0.1541
+      ],
+      "test_overlap_fraction": 0.7202
+    },
+    {
+      "model": "rf",
+      "class_separation": 0.7,
+      "protocol_a_accuracy": 0.9989,
+      "protocol_b_accuracy": 0.9264,
+      "protocol_a_macro_f1": 0.9988,
+      "protocol_b_macro_f1": 0.7309,
+      "macro_f1_inflation": 0.2679,
+      "inflation": 0.0724,
+      "inflation_per_seed": [
+        0.0756,
+        0.0716,
+        0.0701
+      ],
+      "test_overlap_fraction": 0.7202
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+name: tests
+
+on:
+  push:
+    branches: [main, controlled-evaluation]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # The split and fairness tests need neither TensorFlow nor the 2.9GB of
+      # images, so CI installs only what they use and stays fast.
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy pandas scikit-learn
+
+      - name: Run tests
+        run: pytest tests/ -q
+
+      - name: Audit the split on the real metadata
+        run: python scripts/run_experiment.py --metadata-only
+
+      - name: Check the split audit found no leakage
+        run: |
+          python - <<'PY'
+          import json, sys
+          audit = json.load(open("results/split_audit.json"))
+          overlap = audit["lesion_overlap"]
+          assert all(v == 0 for v in overlap.values()), f"leakage detected: {overlap}"
+          classes = audit["test_class_counts"]
+          assert len(classes) == 7, f"test set is missing classes: {classes}"
+          print("split audit clean:", audit["split_sizes"], overlap)
+          PY
+
+      - name: Quantify the original split protocol's leakage
+        run: python scripts/leakage_demo.py --seeds 0 --class-separation 0.35 --models logreg rf
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyflakes
+      - run: pyflakes app.py src/skinfair/*.py scripts/*.py tests/*.py

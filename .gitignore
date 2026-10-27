@@ -1,1 +1,31 @@
-*.env 
+# Secrets
+*.env
+.env
+.env.*
+
+# Data: HAM10000 images are 2.9GB and CC BY-NC 4.0; download them locally.
+data/HAM10000_images_part_1/
+data/HAM10000_images_part_2/
+data/*.zip
+
+# Experiment output
+results/*.keras
+results/*.h5
+results/synthetic_seed*/
+results/brightness_cache.csv
+gan_outputs/
+saved_gan_generator/
+
+# App runtime state
+diagnosis_history.csv
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store

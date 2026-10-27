@@ -1,0 +1,140 @@
+{
+  "generated_at": "2026-10-27T03:56:27.919140+00:00",
+  "skinfair_version": "0.2.0",
+  "python": "3.12.14",
+  "config": {
+    "data": {
+      "metadata_csv": "data/HAM10000_metadata.csv",
+      "image_dirs": [
+        "data/HAM10000_images_part_1",
+        "data/HAM10000_images_part_2"
+      ],
+      "val_fraction": 0.15,
+      "test_fraction": 0.15,
+      "seed": 42,
+      "train_samples_per_class": 5000,
+      "brightness_threshold": 110.0,
+      "brightness_light_threshold": 140.0
+    },
+    "classifier": {
+      "image_size": 224,
+      "batch_size": 32,
+      "max_epochs": 150,
+      "early_stopping_patience": 5,
+      "reduce_lr_patience": 3,
+      "learning_rate": 0.001,
+      "dropout": 0.3,
+      "freeze_base": true,
+      "fine_tune_epochs": 0
+    },
+    "gan": {
+      "image_size": 64,
+      "noise_dim": 100,
+      "epochs": 400,
+      "batch_size": 32,
+      "generator_lr": 0.0001,
+      "discriminator_lr": 0.0001,
+      "conditional": true,
+      "label_smoothing": 0.1
+    },
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "synthetic_per_class": 500,
+    "output_dir": "results"
+  },
+  "metadata_only": true,
+  "split_sizes": {
+    "train": 7025,
+    "val": 1486,
+    "test": 1504
+  },
+  "lesion_overlap": {
+    "train_val": 0,
+    "train_test": 0,
+    "val_test": 0
+  },
+  "test_class_counts": {
+    "nv": 998,
+    "mel": 168,
+    "bkl": 166,
+    "bcc": 83,
+    "akiec": 51,
+    "vasc": 20,
+    "df": 18
+  },
+  "subgroups": {
+    "train": {
+      "overall_dx_distribution": {
+        "nv": 0.671,
+        "mel": 0.111,
+        "bkl": 0.1098,
+        "bcc": 0.0508,
+        "akiec": 0.032,
+        "vasc": 0.0144,
+        "df": 0.011
+      },
+      "unknown": {
+        "n_rows": 7025,
+        "n_unique_images": 7025,
+        "n_unique_lesions": 5230,
+        "dx_counts": {
+          "nv": 4714,
+          "mel": 780,
+          "bkl": 771,
+          "bcc": 357,
+          "akiec": 225,
+          "vasc": 101,
+          "df": 77
+        },
+        "dx_distribution": {
+          "nv": 0.671,
+          "mel": 0.111,
+          "bkl": 0.1098,
+          "bcc": 0.0508,
+          "akiec": 0.032,
+          "vasc": 0.0144,
+          "df": 0.011
+        },
+        "mean_brightness": NaN
+      }
+    },
+    "test": {
+      "overall_dx_distribution": {
+        "nv": 0.6636,
+        "mel": 0.1117,
+        "bkl": 0.1104,
+        "bcc": 0.0552,
+        "akiec": 0.0339,
+        "vasc": 0.0133,
+        "df": 0.012
+      },
+      "unknown": {
+        "n_rows": 1504,
+        "n_unique_images": 1504,
+        "n_unique_lesions": 1120,
+        "dx_counts": {
+          "nv": 998,
+          "mel": 168,
+          "bkl": 166,
+          "bcc": 83,
+          "akiec": 51,
+          "vasc": 20,
+          "df": 18
+        },
+        "dx_distribution": {
+          "nv": 0.6636,
+          "mel": 0.1117,
+          "bkl": 0.1104,
+          "bcc": 0.0552,
+          "akiec": 0.0339,
+          "vasc": 0.0133,
+          "df": 0.012
+        },
+        "mean_brightness": NaN
+      }
+    }
+  }
+}

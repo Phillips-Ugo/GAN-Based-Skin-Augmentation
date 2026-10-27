@@ -6,7 +6,6 @@ from geopy.distance import geodesic
 import streamlit as st
 import numpy as np
 from PIL import Image
-import time
 import datetime
 import os
 import pickle
@@ -108,10 +107,14 @@ def get_nearby_hospitals(lat, lon, radius=5000):
                     })
         
         return hospitals
-    except Exception as e:
+    except Exception:
         return []
 
 # --- Save Diagnosis History ---
+# Written at runtime and gitignored: it is a local log, not repository content.
+HISTORY_CSV = "diagnosis_history.csv"
+
+
 def save_history(image_name, diagnosis, confidence):
     record = {
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -120,87 +123,157 @@ def save_history(image_name, diagnosis, confidence):
         "confidence": f"{confidence*100:.2f}%",
     }
 
-    if os.path.exists("diagnosis_history.csv"):
-        df = pd.read_csv("diagnosis_history.csv")
+    if os.path.exists(HISTORY_CSV):
+        df = pd.read_csv(HISTORY_CSV)
         df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
     else:   
         df = pd.DataFrame([record])
     
-    df.to_csv("diagnosis_history.csv", index=False)
+    df.to_csv(HISTORY_CSV, index=False)
+
+# --- Class label order -------------------------------------------------------
+# The bundled model was trained with labels from `df['dx'].unique()`, i.e. the
+# order the diagnoses first appear in HAM10000_metadata.csv. The original app
+# hardcoded a DIFFERENT order (bkl, bcc, akiec, vasc, nv, mel, df) taken from an
+# unrelated list in the notebook, so six of seven classes were displayed under
+# the wrong disease name: index 1 means melanocytic nevi but was shown as basal
+# cell carcinoma. Deriving the order from the metadata removes the mismatch.
+#
+# Models produced by scripts/run_experiment.py use the fixed alphabetical order
+# in src/skinfair/config.py instead, and write a label file next to the weights.
+METADATA_CSV = os.path.join("data", "HAM10000_metadata.csv")
+
+DX_DISPLAY_NAMES = {
+    "bkl": "Benign keratosis-like lesions",
+    "bcc": "Basal cell carcinoma",
+    "akiec": "Actinic keratoses",
+    "vasc": "Vascular lesions",
+    "nv": "Melanocytic nevi",
+    "mel": "Melanoma",
+    "df": "Dermatofibroma",
+}
+
+# Fallback: the order observed in the shipped HAM10000_metadata.csv.
+FALLBACK_DX_ORDER = ["bkl", "nv", "df", "mel", "vasc", "bcc", "akiec"]
+
+
+@st.cache_resource
+def load_label_order():
+    """Recover the training label order, preferring a sidecar file, then the CSV.
+
+    Returns (index -> display name, provenance string).
+    """
+    sidecar = os.path.join("models", "label_order.json")
+    if os.path.exists(sidecar):
+        try:
+            import json
+
+            with open(sidecar) as handle:
+                order = json.load(handle)["classes"]
+            return (
+                {i: DX_DISPLAY_NAMES.get(dx, dx) for i, dx in enumerate(order)},
+                f"models/label_order.json: {', '.join(order)}",
+            )
+        except Exception:
+            pass
+
+    if os.path.exists(METADATA_CSV):
+        try:
+            order = list(pd.read_csv(METADATA_CSV)["dx"].unique())
+            if len(order) == 7:
+                return (
+                    {i: DX_DISPLAY_NAMES.get(dx, dx) for i, dx in enumerate(order)},
+                    f"derived from {METADATA_CSV}: {', '.join(order)}",
+                )
+        except Exception:
+            pass
+
+    return (
+        {i: DX_DISPLAY_NAMES[dx] for i, dx in enumerate(FALLBACK_DX_ORDER)},
+        f"fallback order: {', '.join(FALLBACK_DX_ORDER)}",
+    )
+
 
 # --- Load pre-trained model ---
+MODEL_CANDIDATES = (
+    os.path.join("models", "skinfair_classifier.keras"),
+    os.path.join("models", "HealthCareModel.h5"),
+    os.path.join("models", "HealthModel.h5"),
+    "HealthCareModel.h5",
+)
+
+
 @st.cache_resource
 def load_model():
+    """Load the classifier, preferring the portable .keras format.
+
+    The bundled .h5 files are pickled Keras objects from the original Colab
+    session, not real HDF5 model files, so `keras.models.load_model` cannot read
+    them and unpickling is version-fragile. Models written by the current
+    pipeline are saved with `model.save(...)` in the `.keras` format and load
+    without any of this.
+    """
     import warnings
-    import os
-    
-    # Suppress warnings during loading
-    warnings.filterwarnings('ignore')
-    
+
+    warnings.filterwarnings("ignore")
     try:
-        # Try loading with compatibility workaround
-        from keras.src.saving import saving_lib
-        
-        # Store original function
-        original_model_from_config = saving_lib._model_from_config
-        
-        def lenient_model_from_config(config, custom_objects=None, compile=True, safe_mode=False):
-            """Lenient version that allows shape mismatches"""
+        for path in MODEL_CANDIDATES:
+            if not os.path.exists(path):
+                continue
+
+            if path.endswith(".keras"):
+                try:
+                    return tf.keras.models.load_model(path), path
+                except Exception:
+                    continue
+
+            # Pickled Keras object: patch the config loader to tolerate the
+            # shape mismatches that a version change introduces.
             try:
-                return original_model_from_config(config, custom_objects, compile, safe_mode)
-            except ValueError as e:
-                if "incompatible" in str(e) and "shape" in str(e):
-                    # Try with compile=False and safe_mode=True
-                    return original_model_from_config(config, custom_objects, compile=False, safe_mode=True)
-                raise
-        
-        # Temporarily replace the function
-        saving_lib._model_from_config = lenient_model_from_config
-        
-        try:
-            # Now try to load
-            with open('HealthCareModel.h5', 'rb') as f:
-                model = pickle.load(f)
-            
-            # Compile the model
-            if hasattr(model, 'compile'):
+                from keras.src.saving import saving_lib
+
+                original = saving_lib._model_from_config
+
+                def lenient(config, custom_objects=None, compile=True, safe_mode=False):
+                    try:
+                        return original(config, custom_objects, compile, safe_mode)
+                    except ValueError as error:
+                        if "incompatible" in str(error) and "shape" in str(error):
+                            return original(config, custom_objects, compile=False, safe_mode=True)
+                        raise
+
+                saving_lib._model_from_config = lenient
+                try:
+                    with open(path, "rb") as handle:
+                        model = pickle.load(handle)
+                finally:
+                    saving_lib._model_from_config = original
+            except Exception:
+                try:
+                    with open(path, "rb") as handle:
+                        model = pickle.load(handle)
+                except Exception:
+                    continue
+
+            if hasattr(model, "compile"):
                 try:
                     model.compile(
-                        optimizer='adam',
-                        loss='sparse_categorical_crossentropy',
-                        metrics=['accuracy']
+                        optimizer="adam",
+                        loss="sparse_categorical_crossentropy",
+                        metrics=["accuracy"],
                     )
-                except Exception as compile_err:
-                    # Model may still work for predictions even if compilation fails
-                    pass
-            
-            return model
-            
-        finally:
-            # Restore original function
-            saving_lib._model_from_config = original_model_from_config
-        
-    except Exception as e:
-        warnings.filterwarnings('default')
-        # Fallback: try loading with environment variable
-        os.environ['KERAS_LOAD_SAFE_MODE'] = '1'
-        try:
-            with open('HealthCareModel.h5', 'rb') as f:
-                model = pickle.load(f)
-            if hasattr(model, 'compile'):
-                try:
-                    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-                except:
-                    pass
-            warnings.filterwarnings('default')
-            return model
-        except Exception as e2:
-            warnings.filterwarnings('default')
-            return None
+                except Exception:
+                    pass  # predictions still work without a compiled metric
+            return model, path
 
-model = load_model()
+        return None, None
+    finally:
+        warnings.filterwarnings("default")
 
-# Model loaded (or None if failed)
+
+model, MODEL_PATH = load_model()
+DIAGNOSIS_MAP, LABEL_ORDER_PROVENANCE = load_label_order()
+
 
 # --- Preprocessing function ---
 def preprocess_image(img):
@@ -214,7 +287,10 @@ def preprocess_image(img):
 # --- Prediction function ---
 def predict_disease(image):
     if model is None:
-        raise ValueError("Model failed to load. Please check HealthCareModel.h5 file.")
+        raise ValueError(
+            "No classifier could be loaded. Expected one of: "
+            + ", ".join(MODEL_CANDIDATES)
+        )
     processed = preprocess_image(image)
     prediction = model.predict(processed, verbose=0)
     predicted_class = np.argmax(prediction)
@@ -293,6 +369,18 @@ def get_disease_info(diagnosis):
 
 # --- Streamlit App Config ---
 st.set_page_config(page_title="AI Medical Diagnosis", page_icon="🩺", layout="wide")
+
+RESEARCH_DISCLAIMER = (
+    "**Research demonstrator, not a medical device.** This model has not been "
+    "clinically validated and must not be used for diagnosis or to inform a "
+    "care decision. It was trained on dermatoscopic images from a predominantly "
+    "light-skinned population, and its accuracy on darker skin is untested. "
+    "If you are concerned about a skin lesion, see a clinician."
+)
+
+
+def show_disclaimer():
+    st.warning(RESEARCH_DISCLAIMER)
 
 # --- Custom CSS Styling ---
 st.markdown("""
@@ -382,6 +470,12 @@ selection = st.sidebar.radio("Go to", ["🔍 Diagnose", "📂 History", "💬 AI
 # --- Main Content ---
 if selection == "🔍 Diagnose":
     st.markdown('<p class="title">AI Medical Image Diagnosis 🧠</p>', unsafe_allow_html=True)
+    show_disclaimer()
+    if model is None:
+        st.error(
+            "No classifier is loaded, so diagnosis is unavailable. Expected one of: "
+            + ", ".join(MODEL_CANDIDATES)
+        )
     st.markdown('<p class="subtitle">Upload a medical image for instant insights</p>', unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader("Upload a medical image", type=["jpg", "jpeg"])
@@ -398,21 +492,18 @@ if selection == "🔍 Diagnose":
                 with st.spinner("Analyzing..."):
                     try:
                         predicted_class, confidence = predict_disease(image)
-                        diagnosis_map = {
-                            0: "Benign keratosis-like lesions",
-                            1: "Basal cell carcinoma",
-                            2: "Actinic keratoses",
-                            3: "Vascular lesions",
-                            4: "Melanocytic nevi",
-                            5: "Melanoma",
-                            6: "Dermatofibroma"
-                        }
-                        result = diagnosis_map.get(predicted_class, "Unknown")
+                        result = DIAGNOSIS_MAP.get(int(predicted_class), "Unknown")
                         save_history(uploaded_file.name, result, confidence)
 
                         st.success("Diagnosis Complete!")
                         st.markdown(f"### 🧾 Result: **{result}**")
                         st.markdown(f"**Confidence Score:** {confidence*100:.2f}%")
+                        st.caption(
+                            "Class label order "
+                            f"({LABEL_ORDER_PROVENANCE}). The bundled weights carry no "
+                            "label metadata, so this ordering is inferred; retrain with "
+                            "scripts/run_experiment.py for weights that record it."
+                        )
 
                         disease_info = get_disease_info(result)
                         with st.expander("📘 Learn More About This Condition"):
@@ -440,8 +531,8 @@ if selection == "🔍 Diagnose":
 # --- History Section ---
 elif selection == "📂 History":
     st.markdown('<p class="title">🗂️ Diagnosis History</p>', unsafe_allow_html=True)
-    if os.path.exists("diagnosis_history.csv"):
-        df = pd.read_csv("diagnosis_history.csv")
+    if os.path.exists(HISTORY_CSV):
+        df = pd.read_csv(HISTORY_CSV)
         st.dataframe(df[df.shape[0]-5:]) # Get last 5 records
     else:
         st.info("No diagnosis history yet.")
@@ -574,6 +665,13 @@ elif selection == "🏥 Nearby Hospitals":
 # --- About Section ---
 elif selection == "ℹ️ About":
     st.markdown('<p class="title">About This App 📘</p>', unsafe_allow_html=True)
+    show_disclaimer()
+    st.info(
+        "The accuracy figures reported for this project are affected by data "
+        "leakage in the original experiment and are not estimates of "
+        "generalisation. See docs/RESULTS_PROVENANCE.md in the repository for "
+        "which claims are backed by code."
+    )
     st.write("""
         This AI-powered app helps diagnose skin and medical conditions for Seven Different Classes: 
         Actinic keratoses, Basal cell carcinoma, Benign keratosis-like lesions, Dermatofibroma, 
